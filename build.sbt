@@ -11,3 +11,5 @@ libraryDependencies ++= Seq(
   "org.http4s"  %% "http4s-blaze-server"  % Http4sVersion, // accepts HTTP requests
   "io.circe"    %% "circe-generic"        % CirceVersion,
 )
+
+assembly / mainClass := Some("app.Http4sTutorial")

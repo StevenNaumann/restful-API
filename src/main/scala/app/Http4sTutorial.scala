@@ -22,7 +22,6 @@ import scala.util.Try // addition automagic functionality
 object Http4sTutorial extends IOApp {
 
   // Library System
-
   case class Author(firstName: String, lastName: String)
   case class Book(id: String, title: String, year: Int, authors: List[Author])
   case class Library(city: String, public: Boolean){
@@ -140,7 +139,7 @@ object Http4sTutorial extends IOApp {
 
     // Used with the logic of "allRoutesComplete" alternatively, you can use "apis" from the run method
     BlazeServerBuilder[IO](runtime.compute)
-      .bindHttp(8080, "localhost")
+      .bindHttp(4000, "0.0.0.0")
       .withHttpApp(allRoutesComplete)
       .resource
       .use(_ => IO.never)
