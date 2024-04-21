@@ -1,17 +1,15 @@
 version: "3.8"
 services:
   web:
-    build: .
+    build: ./api-server
     ports:
       - 4000:4000
     environment:
       DB_URL: #URL for Database ???//db/???
   db:
-    image: mariadb:lts
+    build: ./mariadb
     ports:
-        - 3000:3000
-    environment:
-      MARIADB_ROOT_PASSWORD: db32!Password
+        - 3000:3306
     volumes:
        - sharedVolume:/data/db
 volumes:
