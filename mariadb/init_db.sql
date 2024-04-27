@@ -5,7 +5,7 @@ USE library_system_db;
 CREATE TABLE books (
     book_id UUID PRIMARY KEY,
     title CHAR(60) NOT NULL,
-    publish_date YEAR NOT NULL,
+    publish_date INTEGER NOT NULL,
     genre ENUM('Fiction','Non-Fiction')
 );
 

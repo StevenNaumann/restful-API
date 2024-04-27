@@ -6,10 +6,14 @@ services:
       - 4000:4000
     environment:
       DB_URL: #URL for Database ???//db/???
+    depends_on:
+      db:
+        condition: service_started
+
   db:
     build: ./mariadb
     ports:
-        - 3000:3306
+        - 3306:3306
     volumes:
        - sharedVolume:/data/db
 volumes:
