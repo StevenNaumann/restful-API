@@ -1,7 +1,7 @@
 package app
 
 import app.Resources._
-import app.repository.MariaJDBC
+import app.repository.{AuthorDAO, MariaJDBC}
 import cats._
 import cats.effect._
 import cats.implicits._
@@ -17,19 +17,7 @@ import org.http4s.implicits._
 import org.http4s.server._
 import org.http4s.server.blaze.BlazeServerBuilder
 
-import java.time.Year
-import scala.collection.mutable
-import scala.util.Try
-
 object Http4sTutorial extends IOApp {
-
-  /*
-    - GET all books for a Author published in a given year
-    - GET all Authors for a Book
-    - GET details about author
-    - POST add a new author
-    - POST add a book
-   */
 
   // Request -> F[Response]
   // Request -> F[Option[Response]]
@@ -37,31 +25,12 @@ object Http4sTutorial extends IOApp {
 
   implicit val dbConnection: java.sql.Connection = MariaJDBC.getConnection()
 
-  implicit val authorQueryParamDecoder: QueryParamDecoder[Author] =
-    QueryParamDecoder[String].map{ author =>
-      val authorNames = author.split(" ")
-      Author(authorNames(0), authorNames(1))
-    }
-  object AuthorQueryParamMatcher extends QueryParamDecoderMatcher[Author]("author")(authorQueryParamDecoder)
-
   // Get /movies/author=Stephen%20King&year=1977
-  def bookRoutes[F[_] : Monad]: HttpRoutes[F] = {
+  def bookRoutes[F[_] : Concurrent]: HttpRoutes[F] = {
     val dsl = Http4sDsl[F]
     import dsl._
 
     HttpRoutes.of[F]{
-//      case GET -> Root / "books" :? AuthorQueryParamMatcher(author) +& YearQueryParamMatcher(maybeYear) =>
-//        val booksByAuthor = Resources.findBooksByAuthor(author)
-//        maybeYear match {
-//          case Some(validatedYear) =>
-//            validatedYear.fold(
-//              _ => BadRequest("The year was badly formatted"),
-//              year => {
-//                val booksByAuthorAndYear = booksByAuthor.filter(_.year == year.getValue)
-//                Ok(booksByAuthorAndYear.asJson)
-//              })
-//          case None => Ok(booksByAuthor.asJson)
-//        }
       case GET -> Root / "books" =>
         BookDAO.read()(dbConnection) match {
           case Some(books) => Ok(books.asJson)
@@ -75,42 +44,49 @@ object Http4sTutorial extends IOApp {
     }
   }
 
-  object AuthorPath {
-    def unapply(str: String): Option[Author] = {
-      Try {
-        val tokens = str.split(" ")
-        Author(tokens(0), tokens(1))
-      }
-    }.toOption
-  }
-
-  val authorDetailsDB: mutable.Map[Author, AuthorDetails] =
-    mutable.Map((Author("Stephen", "King"), AuthorDetails("Stephen", "King", "horror")))
-
-  def authorRoutes[F[_]: Monad]: HttpRoutes[F] = {
+  def authorRoutes[F[_]: Concurrent]: HttpRoutes[F] = {
     val dsl = Http4sDsl[F]
     import dsl._
+    implicit val authorDecoder: EntityDecoder[F, Author] = jsonOf[F, Author]
 
     HttpRoutes.of[F]{
-      case GET -> Root / "authors" / AuthorPath(author) =>
-        authorDetailsDB.get(author) match{
-          case Some(authorDetails: AuthorDetails) => Ok(authorDetails.asJson)
-          case _ => NotFound(s"No Author '$author' found in database.")
+      case GET -> Root / "authors" =>
+        AuthorDAO.read()(dbConnection) match {
+          case Some(authors) => Ok(authors.asJson)
+          case None => NotFound(s"No authors found in the database.")
+        }
+      case GET -> Root / "authors" / UUIDVar(authorId) =>
+        AuthorDAO.readById(authorId)(dbConnection) match{
+          case Some(author) => Ok(author.asJson)
+          case _ => NotFound(s"No Author '$authorId' found in database.")
+        }
+      case req@POST -> Root / "authors" =>
+        for {
+          author <- req.as[Author]
+          _ = AuthorDAO.create(author)(dbConnection)
+          response <- Ok.headers(`Content-Encoding`(ContentCoding.gzip))
+            .map(_.addCookie(ResponseCookie("My-Cookie", "value")))
+        } yield response
+//      case PUT -> Root / "authors" / authorQueryParamMatcher(author) =>
+//        AuthorDAO.update()(dbConnection) match{
+//          case Some(author) => Ok(author.asJson)
+//          case _ => NotFound(s"No Author '$authorId' found in database.")
+//        }
+      case DELETE -> Root / "authors" / UUIDVar(authorId) =>
+        AuthorDAO.delete(authorId)(dbConnection) match{
+          case Some(author) => Ok(author.asJson)
+          case _ => NotFound(s"No Author '$authorId' found in database.")
         }
     }
   }
 
-  def allRoutes[F[_] : Monad]: HttpRoutes[F] =
-    bookRoutes[F] <+> authorRoutes[F] // cats.syntax.semigroupK._
+    def allRoutes[F[_] : Concurrent]: HttpRoutes[F] =
+      bookRoutes[F] <+> authorRoutes[F] // cats.syntax.semigroupK._
 
-  def allRoutesComplete[F[_]: Monad]: HttpApp[F] =
-    allRoutes[F].orNotFound
+    def allRoutesComplete[F[_]: Concurrent]: HttpApp[F] =
+      allRoutes[F].orNotFound
 
   override def run(args: List[String]): IO[ExitCode] = {
-    val apis = Router(
-      "/api" -> bookRoutes[IO],
-      "/api/admin" -> authorRoutes[IO]
-    ).orNotFound
 
     // Used with the logic of "allRoutesComplete" alternatively, you can use "apis" from the run method
     BlazeServerBuilder[IO](runtime.compute)

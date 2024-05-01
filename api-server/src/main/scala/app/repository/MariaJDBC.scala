@@ -5,6 +5,7 @@ import java.sql.{Connection, DriverManager, ResultSet}
 object MariaJDBC{
   val driver = "com.mysql.cj.jdbc.Driver"
   val url = "jdbc:mysql://db:3306"
+  val database = "library_system_db"
   val username = "root"
   val password = "root" // better to have this encrypted and retrieved via a service,
   // never check-in an actual password.
@@ -31,7 +32,9 @@ object MariaJDBC{
 //  }
 
   def getConnection(): Connection = {
-    DriverManager.getConnection(url, username, password) //hikari connection pool
+    val connection = DriverManager.getConnection(url, username, password) //hikari connection pool
+    connection.setCatalog(database)
+    connection
   }
 
 }
